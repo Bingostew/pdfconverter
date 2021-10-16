@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<body>
+<span id="test"> testSpan </span>
+<div id = "imc" >
+<input type="file" id="im1" class = "button">
+</div>
+<input type = "text" id = "name">
+<label for = "name">Output Name</label>
+<br>
+<button onclick="addImg();" class = "button" >Add File</button>
+<button onclick="combine();" class = "button"> Combine To PDF</button>
+<button onclick="download();"class = "button" id = "download"> Download</button>
+<br>
+<span id = "warning"></span>
+</body>
+
+
+<style>
+    #name{
+        margin: 20px;
+        outline: 3px solid black;
+    }
+    #warning{
+        color: red;
+    }
+    #imc{
+        display: flex;
+        flex-direction: column;
+    }
+    .button{
+        background-color: white;
+        outline: 1px solid black;
+        margin: 20px;
+    }
+</style>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+<script>
+   
+    var imageDiv = document.getElementById("imc");
+    var outputName = document.getElementById("name");
+    var warning = document.getElementById("warning");
+    var downloadButton = document.getElementById("download");
+    var test = document.getElementById("test");
+    var inputId = 1;
+    var doc = new window.jspdf.jsPDF()
+    
+    downloadButton.disabled = true;
+    function addImg(){
+        inputId ++;
+        var imageInput = document.createElement("input");
+        imageInput.type = "file";
+        imageInput.id = "im" + inputId;
+        imageInput.className = "button";
+        imageDiv.appendChild(imageInput);
+    }
+
+    function combine(){   
+        //window.jsPDF = window.jspdf.jsPDF;
+        const fileReader = new FileReader();
+        readImage(1);
+        function readImage(idInt){
+            if(idInt > imageDiv.childElementCount) return;
+            var img = new Image();
+            var id = "im" + idInt;
+            var files = document.getElementById(id).files;
+            if(files[0] == null){
+                warning.innerHTML = "File not selected!";
+                downloadButton.style.backgroundColor = "white";
+                downloadButton.disabled = true;
+                return;
+            }
+            else{
+                warning.innerHTML = "";
+            }
+            var file = files[0];
+            
+            fileReader.onload = function(e){
+                img.src = this.result;
+                if(idInt != 1){
+                    doc.addPage();
+                }   
+                // Need to rotate 90 degrees for some reason
+                // Also need to offset image as rotation is not around center
+                doc.addImage(img,'JPG', 5 ,-190, 280, 200, null, null, -90)
+                readImage(idInt + 1);
+                downloadButton.style.backgroundColor = "lime";
+                downloadButton.disabled = false;
+            };
+            fileReader.readAsDataURL(file);
+        }
+    }
+
+    function download(){
+        var fileName = outputName.value;
+        doc.save(fileName);
+    }
+</script>
