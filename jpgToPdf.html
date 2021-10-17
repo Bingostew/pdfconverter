@@ -1,24 +1,40 @@
 <!DOCTYPE html>
 <body>
+
 <span id="test"> testSpan </span>
-<div id = "imc" >
-<input type="file" id="im1" class = "button">
-</div>
-<input type = "text" id = "name">
-<label for = "name">Output Name</label>
 <br>
 <button onclick="addImg();" class = "button" >Add File</button>
 <button onclick="combine();" class = "button"> Combine To PDF</button>
 <button onclick="download();"class = "button" id = "download"> Download</button>
 <br>
+
+<div id = "toolBox">
+<span style="font-size: 20px; font-weight: bold; margin: 10px;">Meta Information</span>
+<br>
+<input type = "text" id = "name" value="file name">
+<button id = "nameConfirm" class = "button" onclick="saveName();"> Confirm </button>
+<br>
+<input type="checkbox" id = "canvas" style = "margin:10px;">
+<label for="checkbox">Use On Canvas</label>
+</div>
+
 <span id = "warning"></span>
+
+<div id = "imc" >
+<input type="file" id="im1" class = "button">
+</div>
 </body>
 
 
 <style>
+    #toolBox{
+        background-color: blanchedalmond;
+        border: 3px solid black;
+    }
+
     #name{
-        margin: 20px;
-        outline: 3px solid black;
+        margin: 10px;
+        border: 4px solid gray;
     }
     #warning{
         color: red;
@@ -43,13 +59,30 @@
     var test = document.getElementById("test");
     var inputId = 1;
     var doc = new window.jspdf.jsPDF()
-    
+
+    var unsavedBorder = "4px solid gray";
+    var savedBorder = "4px solid lime";
+    var fileName = "";
+
+    function disableDownload(){
+        downloadButton.style.backgroundColor = "white";
+        downloadButton.disabled = true;
+    }
+
+    document.getElementById("im1").onchange = disableDownload;
+    outputName.onfocus = function(){
+        downloadButton.style.backgroundColor = "white";
+        downloadButton.disabled = true;
+        outputName.style.border = unsavedBorder;
+    }
+
     downloadButton.disabled = true;
     function addImg(){
         inputId ++;
         var imageInput = document.createElement("input");
         imageInput.type = "file";
         imageInput.id = "im" + inputId;
+        imageInput.onchange = disableDownload;
         imageInput.className = "button";
         imageDiv.appendChild(imageInput);
     }
@@ -65,8 +98,12 @@
             var files = document.getElementById(id).files;
             if(files[0] == null){
                 warning.innerHTML = "File not selected!";
-                downloadButton.style.backgroundColor = "white";
-                downloadButton.disabled = true;
+               disableDownload();
+                return;
+            }
+            else if(outputName.style.border == unsavedBorder){
+                warning.innerHTML = "File name not confirmed!";
+                disableDownload();
                 return;
             }
             else{
@@ -79,9 +116,15 @@
                 if(idInt != 1){
                     doc.addPage();
                 }   
-                // Need to rotate 90 degrees for some reason
-                // Also need to offset image as rotation is not around center
-                doc.addImage(img,'JPG', 5 ,-190, 280, 200, null, null, -90)
+
+                if(document.getElementById("canvas").checked){
+                    doc.addImage(img,'JPG',5, 5, 200, 280, null, null, 0);
+                }
+                else{
+                    // Also need to offset image as rotation is not around center
+                    // Need to rotate 90 degrees for some reason
+                    doc.addImage(img,'JPG', 5 ,-190, 280, 200, null, null, -90);     
+                }
                 readImage(idInt + 1);
                 downloadButton.style.backgroundColor = "lime";
                 downloadButton.disabled = false;
@@ -90,8 +133,12 @@
         }
     }
 
+    function saveName(){
+        fileName = outputName.value;
+        outputName.style.border = savedBorder
+    }
+
     function download(){
-        var fileName = outputName.value;
         doc.save(fileName);
     }
 </script>
