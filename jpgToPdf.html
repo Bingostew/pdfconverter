@@ -23,9 +23,11 @@
 <button onclick="download();"class = "button" id = "download"> Download</button>
 <br>
 
-<div id = "imc" >
-<input type="file" id="im1" class = "input">
+<div style = "display: flex;">
+<div id = "imc" ></div>
+<div id = "preview" style="display: flex; flex-direction: column;"></div>
 </div>
+
 </body>
 
 
@@ -75,8 +77,7 @@
         color: red;
     }
     #imc{
-        display: flex;
-        flex-direction: column;
+        width: 20%;
     }
     .button{
         background-color: #eeeeee;
@@ -87,28 +88,34 @@
         font-size: small;
         margin: 20px;
     }
+
 </style>
 <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
 <script>
     var metaInfo = {"canavs":false};
 
     var imageDiv = document.getElementById("imc");
+    var previewDiv = document.getElementById("preview");
     var outputName = document.getElementById("name");
     var warning = document.getElementById("warning");
     var downloadButton = document.getElementById("download");
     var test = document.getElementById("test");
-    var inputId = 1;
+    var inputId = 0;
     var doc = new window.jspdf.jsPDF()
 
     var unsavedBorder = "4px solid gray";
     var savedBorder = "4px solid green";
+    var previewWidth = 300;
+    var previewHeight = 300;
     var fileName = "";
-
+var i = 0;
+    // Use to disable download when name not confirmed
     function disableDownload(){
         downloadButton.style.backgroundColor = "white";
         downloadButton.disabled = true;
     }
 
+    // change name input highlight color
     document.getElementById("im1").onchange = disableDownload;
     outputName.onfocus = function(){
         downloadButton.style.backgroundColor = "white";
@@ -116,14 +123,24 @@
         outputName.style.border = unsavedBorder;
     }
 
+    // Adding a file input, then add a preview image
     downloadButton.disabled = true;
     function addImg(){
-        inputId ++;
+
+        // Add to preview
+        var previewImg = document.createElement("img");
+        previewImg.width = previewWidth;
+        previewImg.height = previewHeight;
+        previewDiv.appendChild(previewImg);
+
+        // Add input file
         var imageInput = document.createElement("input");
+        let thisChildIndex = inputId;
         imageInput.type = "file";
         imageInput.id = "im" + inputId;
         imageInput.onchange = disableDownload;
         imageInput.className = "input";
+        imageInput.onchange = function() {updatePreview(thisChildIndex, imageInput);};
 
         // Animation
         imageInput.style.scale = 0;
@@ -140,10 +157,13 @@
             }
         }
         imageDiv.appendChild(imageInput);
+        inputId ++;
     }
 
+    // Remove image from file input list, then remove preview image
     function removeImg(){
         var imageInput = imageDiv.lastElementChild;
+        var preview = previewDiv.lastElementChild;
 
         // Animation
         let id = null;
@@ -153,12 +173,14 @@
             if(parseFloat(imageInput.style.scale) <= 0){
                 clearInterval(id);
                 imageDiv.lastElementChild.remove();
+                removePreview(parseInt(imageInput.id.charAt(imageDiv.id.length - 1)));
                 inputId --;
             }
             else{
                 var currentScale = parseFloat(imageInput.style.scale);
                 test.innerHTML = currentScale;
                 imageInput.style.scale = currentScale - t * t;
+                preview.style.scale = currentScale - t * t;
             }
         }
         imageDiv.appendChild(imageInput);
@@ -178,6 +200,7 @@
         }
     }
 
+    // Use API to combine files into PDF
     function combine(){   
         //window.jsPDF = window.jspdf.jsPDF;
         const fileReader = new FileReader();
@@ -222,6 +245,31 @@
             };
             fileReader.readAsDataURL(file);
         }
+    }
+
+
+    // Handler to update preview images
+    function updatePreview(childIndex, element){
+        var tgt = element || window.event.srcElement,
+        files = element.files;
+
+        if (FileReader && files && files.length) {
+            var fr = new FileReader();
+            fr.onload = function () {
+                var preview = previewDiv.childNodes[childIndex];
+                preview.src = fr.result;
+                preview.width = previewWidth;
+                preview.height = previewHeight;
+                test.innerHTML = previewDiv.childElementCount;
+            }
+            fr.readAsDataURL(files[0]);
+        }
+    }
+
+    // Handler to delete preview images
+    function removePreview(childIndex){
+        var preview = previewDiv.childNodes[childIndex];
+        preview.remove();
     }
 
     function saveName(){
