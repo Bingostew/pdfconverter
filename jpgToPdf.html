@@ -190,7 +190,7 @@ var i = 0;
         test.innerHTML = id;
         var selector = document.getElementById(id);
         metaInfo[id] = !metaInfo[id];
-        var selected = metaInfo[id];
+        let selected = metaInfo[id];
 
         if(selected){
             selector.style.backgroundColor = "green";
@@ -204,7 +204,8 @@ var i = 0;
     function combine(){   
         //window.jsPDF = window.jspdf.jsPDF;
         const fileReader = new FileReader();
-        readImage(1);
+        readImage(0);
+
         function readImage(idInt){
             if(idInt > imageDiv.childElementCount) return;
             var img = new Image();
@@ -227,11 +228,11 @@ var i = 0;
             
             fileReader.onload = function(e){
                 img.src = this.result;
-                if(idInt != 1){
+                if(idInt != 0){
                     doc.addPage();
                 }   
 
-                if(document.getElementById("canvas").checked){
+                if(metaInfo["canvas"]){
                     doc.addImage(img,'JPG',5, 5, 200, 280, null, null, 0);
                 }
                 else{
