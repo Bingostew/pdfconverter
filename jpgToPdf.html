@@ -19,6 +19,7 @@
 <br>
 <button onclick="addImg();" class = "button" >Add File</button>
 <button onclick="removeImg();" class = "button" >Remove File</button>
+<button onclick="clearImg();" class = "button" >Clear Files</button>
 <button onclick="combine();" class = "button"> Combine To PDF</button>
 <button onclick="download();"class = "button" id = "download"> Download</button>
 <br>
@@ -88,6 +89,9 @@
         font-size: small;
         margin: 20px;
     }
+    .preview{
+        border: 1px solid black;
+    }
 
 </style>
 <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
@@ -108,6 +112,7 @@
     var previewWidth = 300;
     var previewHeight = 300;
     var fileName = "";
+    var previewImgSrc = "https://i.ibb.co/6DtpSNY/Screen-Shot-2021-11-19-at-9-30-15-PM.png";
 var i = 0;
     // Use to disable download when name not confirmed
     function disableDownload(){
@@ -131,6 +136,8 @@ var i = 0;
         var previewImg = document.createElement("img");
         previewImg.width = previewWidth;
         previewImg.height = previewHeight;
+        previewImg.className = "preview";
+        previewImg.src = previewImgSrc;
         previewDiv.appendChild(previewImg);
 
         // Add input file
@@ -184,6 +191,15 @@ var i = 0;
             }
         }
         imageDiv.appendChild(imageInput);
+    }
+
+    // Clear file of all inputs 
+    function clearImg(){
+        for(var i = 0; i < imageDiv.childElementCount; i ++){
+            imageDiv.childNodes[i].value = "";
+            var preview = previewDiv.childNodes[i];
+            preview.src = previewImgSrc;
+        }
     }
 
     function setMetaSelector(id){
