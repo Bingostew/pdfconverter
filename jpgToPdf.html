@@ -21,12 +21,12 @@
 <button onclick="removeImg();" class = "button" >Remove File</button>
 <button onclick="clearImg();" class = "button" >Clear Files</button>
 <button onclick="combine();" class = "button"> Combine To PDF</button>
-<button onclick="download();"class = "button" id = "download"> Download</button>
 <br>
 
-<div style = "display: flex;">
+<div id = "workContainer" >
 <div id = "imc" ></div>
-<div id = "preview" style="display: flex; flex-direction: column;"></div>
+<div id = "preview" style="display: flex; flex-direction: column; width:30%"></div>
+<div id = "fileBase" style="display: flex; flex-direction: column; width:30%; float:right;"></div>
 </div>
 
 </body>
@@ -43,6 +43,12 @@
         font-size: medium;
         font-family: Arial;
         margin: 10px;
+    }
+    #workContainer{
+        display: flex;
+    }
+    #workContainer > div{
+        margin-left: 20px;
     }
     .checkbox{
         height: 20px;
@@ -78,7 +84,7 @@
         color: red;
     }
     #imc{
-        width: 20%;
+        width: 25%;
     }
     .button{
         background-color: #eeeeee;
@@ -91,8 +97,15 @@
     }
     .preview{
         border: 1px solid black;
+        height: 300px;
+        width: 300px;
     }
-
+    .fileButton{
+        border: 1px solid black;
+        background-color: #dfdfdf;
+        border-radius: 1px;
+        font-family: 'Arial';
+    }
 </style>
 <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
 <script>
@@ -100,9 +113,9 @@
 
     var imageDiv = document.getElementById("imc");
     var previewDiv = document.getElementById("preview");
+    var fileBaseDiv = document.getElementById("fileBase");
     var outputName = document.getElementById("name");
     var warning = document.getElementById("warning");
-    var downloadButton = document.getElementById("download");
     var test = document.getElementById("test");
     var inputId = 0;
     var doc = new window.jspdf.jsPDF()
@@ -113,23 +126,10 @@
     var previewHeight = 300;
     var fileName = "";
     var previewImgSrc = "https://i.ibb.co/6DtpSNY/Screen-Shot-2021-11-19-at-9-30-15-PM.png";
-var i = 0;
-    // Use to disable download when name not confirmed
-    function disableDownload(){
-        downloadButton.style.backgroundColor = "white";
-        downloadButton.disabled = true;
-    }
 
-    // change name input highlight color
-    document.getElementById("im1").onchange = disableDownload;
-    outputName.onfocus = function(){
-        downloadButton.style.backgroundColor = "white";
-        downloadButton.disabled = true;
-        outputName.style.border = unsavedBorder;
-    }
 
+    outputName.onfocus = function(){outputName.style.border = unsavedBorder};
     // Adding a file input, then add a preview image
-    downloadButton.disabled = true;
     function addImg(){
 
         // Add to preview
@@ -145,7 +145,6 @@ var i = 0;
         let thisChildIndex = inputId;
         imageInput.type = "file";
         imageInput.id = "im" + inputId;
-        imageInput.onchange = disableDownload;
         imageInput.className = "input";
         imageInput.onchange = function() {updatePreview(thisChildIndex, imageInput);};
 
@@ -200,6 +199,9 @@ var i = 0;
             var preview = previewDiv.childNodes[i];
             preview.src = previewImgSrc;
         }
+
+        // Create a new doc.
+        doc = new window.jspdf.jsPDF();
     }
 
     function setMetaSelector(id){
@@ -218,23 +220,21 @@ var i = 0;
 
     // Use API to combine files into PDF
     function combine(){   
-        //window.jsPDF = window.jspdf.jsPDF;
         const fileReader = new FileReader();
         readImage(0);
+        let headerImgSrc = ""; // used for filebase
 
         function readImage(idInt){
-            if(idInt > imageDiv.childElementCount) return;
+            if(idInt >= imageDiv.childElementCount) return;
             var img = new Image();
             var id = "im" + idInt;
             var files = document.getElementById(id).files;
             if(files[0] == null){
                 warning.innerHTML = "File not selected!";
-               disableDownload();
                 return;
             }
             else if(outputName.style.border == unsavedBorder){
                 warning.innerHTML = "File name not confirmed!";
-                disableDownload();
                 return;
             }
             else{
@@ -247,6 +247,9 @@ var i = 0;
                 if(idInt != 0){
                     doc.addPage();
                 }   
+                else{
+                    headerImgSrc = this.result;
+                }
 
                 if(metaInfo["canvas"]){
                     doc.addImage(img,'JPG',5, 5, 200, 280, null, null, 0);
@@ -256,14 +259,58 @@ var i = 0;
                     // Need to rotate 90 degrees for some reason
                     doc.addImage(img,'JPG', 5 ,-190, 280, 200, null, null, -90);     
                 }
+
+                if(idInt == imageDiv.childElementCount - 1){
+                    updateFileBase(headerImgSrc);
+                }
                 readImage(idInt + 1);
-                downloadButton.style.backgroundColor = "lime";
-                downloadButton.disabled = false;
             };
             fileReader.readAsDataURL(file);
         }
     }
 
+
+    // Add downloadable buttons to the filebase column
+    function updateFileBase(titleImgSrc){
+        var heightOffset = 25;
+
+        var fileButton = document.createElement("img");
+        var overlay = document.createElement("div");
+        var name = document.createElement("div");
+
+        name.innerHTML = outputName.value + ".pdf";
+        name.style.padding = "10px";
+        name.style.outline = "1px solid black";
+        name.className = "stext";
+
+        overlay.innerHTML = "Download";
+        overlay.style.position = "absolute";
+        overlay.style.backgroundColor = "#80808090";
+        overlay.className = "preview";
+        overlay.style.textAlign = "center";
+        overlay.style.fontFamily = 'Arial';
+        overlay.style.fontSize = "40";
+
+        fileButton.width = previewWidth;
+        fileButton.height = previewHeight;
+        fileButton.src = titleImgSrc;
+        fileButton.className = "fileButton";
+        fileButton.onmouseover = function() {
+            test.innerHTML = "over";
+            overlay.style.display = "block";
+            overlay.innerHTML = "Download";
+        }
+        overlay.onmouseleave = function() {
+            test.innerHTML = "out";
+            overlay.style.display = "none";
+            overlay.innerHTML = "";
+        }
+        overlay.onclick = function(e) { download(); };
+
+        fileBaseDiv.appendChild(name);
+        fileBaseDiv.appendChild(fileButton);
+        fileBaseDiv.appendChild(overlay);
+    }
 
     // Handler to update preview images
     function updatePreview(childIndex, element){
@@ -275,8 +322,7 @@ var i = 0;
             fr.onload = function () {
                 var preview = previewDiv.childNodes[childIndex];
                 preview.src = fr.result;
-                preview.width = previewWidth;
-                preview.height = previewHeight;
+                preview.className = "preview";
                 test.innerHTML = previewDiv.childElementCount;
             }
             fr.readAsDataURL(files[0]);
