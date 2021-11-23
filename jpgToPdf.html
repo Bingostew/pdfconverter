@@ -225,8 +225,12 @@
     function clearImg(){
         for(var i = 0; i < imageDiv.childElementCount; i ++){
             imageDiv.childNodes[i].value = "";
-            var preview = previewDiv.childNodes[i];
-            preview.src = previewImgSrc;
+            var previewContainer = previewDiv.childNodes[i];
+            previewContainer.childNodes[0].src = previewImgSrc;
+            previewContainer.childNodes.forEach(function(item, index){
+                if(index == 0) return;
+                previewContainer.removeChild(item);
+            });
         }
 
         // Create a new doc.
@@ -357,7 +361,7 @@
             fr.onload = function () {
                 // Set up UI for transforming image
                 var previewContainer = previewDiv.childNodes[childIndex];
-                var preview = previewContainer.childNodes[childIndex];
+                var preview = previewContainer.childNodes[0];
                 var overlay = document.createElement("div");
                 var rotateButton = document.createElement("button");
 
