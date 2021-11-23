@@ -8,10 +8,6 @@
 <input type = "text" id = "name" class="input" value="file name">
 <button id = "nameConfirm" class = "button" onclick="saveName();"> Confirm </button>
 <br>
-<div style="display: flex; flex-direction: row;">
-<button id = "canvas" onclick="setMetaSelector('canvas');" class = "checkbox">
-<button class = "nullButton">Use On Canvas</button>
-</div>
 </div>
 
 <span id = "warning"></span>
@@ -96,7 +92,14 @@
         margin: 20px;
     }
     .preview{
+        position: relative;
         border: 1px solid black;
+        height: 300px;
+        width: 300px;
+    }
+    .preview > *{
+        position: absolute;
+        top: 0;
         height: 300px;
         width: 300px;
     }
@@ -106,10 +109,32 @@
         border-radius: 1px;
         font-family: 'Arial';
     }
+    .overlay{
+        display: flex;
+        background-color: #80808044;
+        text-align: center;
+        font-family: 'Arial';
+        font-size: 60;
+    }
+    .optionItem{
+        background-color:rgb(236, 236, 236);
+        margin:20px;
+        width: 20%;
+        height: 20%;
+        border: 1px solid black;
+        border-radius: 5px;
+        font-family: 'Arial';
+        font-size: 50;
+    }
 </style>
 <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
 <script>
-    var metaInfo = {"canavs":false};
+    var imageItem = function(id){
+        var obj = {"id" : id, "rotation":0};
+
+        return obj;
+    }
+    var imageItemList = [];
 
     var imageDiv = document.getElementById("imc");
     var previewDiv = document.getElementById("preview");
@@ -133,12 +158,15 @@
     function addImg(){
 
         // Add to preview
+        var previewContainer = document.createElement("div");
         var previewImg = document.createElement("img");
-        previewImg.width = previewWidth;
-        previewImg.height = previewHeight;
+
+        previewContainer.className = "preview";
+
         previewImg.className = "preview";
         previewImg.src = previewImgSrc;
-        previewDiv.appendChild(previewImg);
+        previewContainer.appendChild(previewImg);
+        previewDiv.appendChild(previewContainer);
 
         // Add input file
         var imageInput = document.createElement("input");
@@ -146,6 +174,7 @@
         imageInput.type = "file";
         imageInput.id = "im" + inputId;
         imageInput.className = "input";
+        imageItemList.push(imageItem(inputId));
         imageInput.onchange = function() {updatePreview(thisChildIndex, imageInput);};
 
         // Animation
@@ -170,7 +199,7 @@
     function removeImg(){
         var imageInput = imageDiv.lastElementChild;
         var preview = previewDiv.lastElementChild;
-
+        imageItemList.pop();
         // Animation
         let id = null;
         id = setInterval(moveHandler);
@@ -226,6 +255,7 @@
 
         function readImage(idInt){
             if(idInt >= imageDiv.childElementCount) return;
+            var imageItem = imageItemList[idInt];
             var img = new Image();
             var id = "im" + idInt;
             var files = document.getElementById(id).files;
@@ -251,13 +281,26 @@
                     headerImgSrc = this.result;
                 }
 
-                if(metaInfo["canvas"]){
+                // Handle image rotation
+                // need to offset image as rotation is not around center
+                switch(imageItem.rotation){
+                    case 0:
+                    doc.addImage(img,'JPG', 5 ,-190, 280, 200, null, null, 270);    
+                    break;
+                    
+                    case 90:
                     doc.addImage(img,'JPG',5, 5, 200, 280, null, null, 0);
-                }
-                else{
-                    // Also need to offset image as rotation is not around center
-                    // Need to rotate 90 degrees for some reason
-                    doc.addImage(img,'JPG', 5 ,-190, 280, 200, null, null, -90);     
+                    break;
+
+                    case 180: 
+                    test.innerHTML = 180 + "rot";
+                    doc.addImage(img,'JPG', 205, 90, 280, 200, null, null, 90);    
+                    break;
+
+                    case 270:
+                    test.innerHTML = 270 + "rot";
+                    doc.addImage(img,'JPG',205, -270, 200, 280, null, null, 180);
+                    break;
                 }
 
                 if(idInt == imageDiv.childElementCount - 1){
@@ -272,44 +315,36 @@
 
     // Add downloadable buttons to the filebase column
     function updateFileBase(titleImgSrc){
-        var heightOffset = 25;
-
+        var container = document.createElement("div");
         var fileButton = document.createElement("img");
         var overlay = document.createElement("div");
         var name = document.createElement("div");
 
+        container.className = "preview";
+        container.style.position = "relative";
         name.innerHTML = outputName.value + ".pdf";
         name.style.padding = "10px";
-        name.style.outline = "1px solid black";
+        name.style.marginLeft = 0;
+        name.style.width = "300px";
         name.className = "stext";
 
         overlay.innerHTML = "Download";
-        overlay.style.position = "absolute";
-        overlay.style.backgroundColor = "#80808090";
-        overlay.className = "preview";
-        overlay.style.textAlign = "center";
-        overlay.style.fontFamily = 'Arial';
-        overlay.style.fontSize = "40";
+        overlay.className = "overlay";
 
-        fileButton.width = previewWidth;
-        fileButton.height = previewHeight;
         fileButton.src = titleImgSrc;
         fileButton.className = "fileButton";
         fileButton.onmouseover = function() {
-            test.innerHTML = "over";
             overlay.style.display = "block";
-            overlay.innerHTML = "Download";
         }
         overlay.onmouseleave = function() {
-            test.innerHTML = "out";
             overlay.style.display = "none";
-            overlay.innerHTML = "";
         }
         overlay.onclick = function(e) { download(); };
 
         fileBaseDiv.appendChild(name);
-        fileBaseDiv.appendChild(fileButton);
-        fileBaseDiv.appendChild(overlay);
+        container.appendChild(fileButton);
+        container.appendChild(overlay);
+        fileBaseDiv.appendChild(container);
     }
 
     // Handler to update preview images
@@ -320,10 +355,42 @@
         if (FileReader && files && files.length) {
             var fr = new FileReader();
             fr.onload = function () {
-                var preview = previewDiv.childNodes[childIndex];
+                // Set up UI for transforming image
+                var previewContainer = previewDiv.childNodes[childIndex];
+                var preview = previewContainer.childNodes[childIndex];
+                var overlay = document.createElement("div");
+                var rotateButton = document.createElement("button");
+
+                overlay.style.display = "flex";
+                overlay.className = "overlay";
+
+                rotateButton.innerHTML = "Rotate";
+                rotateButton.className = "optionItem";
+
+                overlay.appendChild(rotateButton);
+                previewContainer.appendChild(overlay);
+
+                preview.onmouseover = function() {
+                    overlay.style.display = "block";
+                }
+                overlay.onmouseleave = function() {
+                    overlay.style.display = "none";
+                }
+
+                // Rotation transform
+                rotateButton.onclick = function(){
+                    let imageItem = imageItemList[childIndex];
+                    let rotation = imageItem.rotation;
+                    rotation += 90;
+                    if(rotation >= 360){
+                        rotation = 0;
+                    }
+                    imageItem.rotation = rotation;
+                    preview.style.transform = "rotate(" + rotation + "deg)";
+                    test.innerHTML = rotation;
+                }
                 preview.src = fr.result;
                 preview.className = "preview";
-                test.innerHTML = previewDiv.childElementCount;
             }
             fr.readAsDataURL(files[0]);
         }
