@@ -16,7 +16,7 @@
 <button onclick="addImg();" class = "button" >Add File</button>
 <button onclick="removeImg();" class = "button" >Remove File</button>
 <button onclick="clearImg();" class = "button" >Clear Files</button>
-<button onclick="combine();" class = "button"> Combine To PDF</button>
+<button onclick="combine();" class = "button"> Process</button>
 <br>
 
 <div id = "workContainer" >
@@ -25,6 +25,10 @@
 <div id = "fileBase" style="display: flex; flex-direction: column; width:30%; float:right;"></div>
 </div>
 
+<div id = "pageOverlay"></div>
+<div id = "pdfEditor">
+    <button id = "pdfClose" onclick="hidePDFEditor();">X</button>
+</div>
 </body>
 
 
@@ -39,6 +43,17 @@
         font-size: medium;
         font-family: Arial;
         margin: 10px;
+    }
+    #pageOverlay{
+        padding: 0%;
+        margin: 0%;
+        position:absolute;
+        display: none;
+        top: 0%;
+        left: 0%;
+        width: 100%;
+        height: 100%;
+        background-color: #3d3d3dc4;
     }
     #workContainer{
         display: flex;
@@ -82,6 +97,26 @@
     #imc{
         width: 25%;
     }
+    #pdfEditor{
+        position:absolute;
+        display: none;
+        overflow: scroll;
+        padding: 10px;
+        background-color: #d6d6d6;
+        width: 50%;
+        height: 70%;
+        left: 25%;
+        top: 15%;
+        border-radius: 10px;
+        border: 2px solid black;
+    }
+    #pdfClose{
+        position:sticky;
+        width: 30px;
+        height: 30px;
+        right:0%;
+        background-color: rgb(207, 108, 108);
+    }
     .button{
         background-color: #eeeeee;
         height: 30px;
@@ -110,11 +145,15 @@
         font-family: 'Arial';
     }
     .overlay{
-        display: flex;
+        position:absolute;
+        display: none;
         background-color: #80808044;
+        border: none;
         text-align: center;
         font-family: 'Arial';
         font-size: 60;
+        width: 100%;
+        height: 100%;
     }
     .optionItem{
         background-color:rgb(236, 236, 236);
@@ -128,22 +167,33 @@
     }
 </style>
 <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js"></script>
+<script src="https://unpkg.com/pdf-lib@1.11.0"></script>
+<script src="https://unpkg.com/downloadjs@1.4.7"></script>
+
 <script>
-    var imageItem = function(id){
-        var obj = {"id" : id, "rotation":0};
+    const {PDFDocument} = PDFLib;
+
+    var imageItem = function(id, type){
+        var obj = {"id" : id, "type" : type, "rotation":0, pdfDoc:""};
 
         return obj;
     }
     var imageItemList = [];
 
+    var pageOverlay = document.getElementById("pageOverlay");
     var imageDiv = document.getElementById("imc");
     var previewDiv = document.getElementById("preview");
     var fileBaseDiv = document.getElementById("fileBase");
+    var pdfDiv = document.getElementById("pdfEditor");
     var outputName = document.getElementById("name");
     var warning = document.getElementById("warning");
     var test = document.getElementById("test");
     var inputId = 0;
-    var doc = new window.jspdf.jsPDF()
+
+    var doc = new window.jspdf.jsPDF();
+    var masterPdf = null;
 
     var unsavedBorder = "4px solid gray";
     var savedBorder = "4px solid green";
@@ -151,7 +201,6 @@
     var previewHeight = 300;
     var fileName = "";
     var previewImgSrc = "https://i.ibb.co/6DtpSNY/Screen-Shot-2021-11-19-at-9-30-15-PM.png";
-
 
     outputName.onfocus = function(){outputName.style.border = unsavedBorder};
     // Adding a file input, then add a preview image
@@ -171,11 +220,20 @@
         // Add input file
         var imageInput = document.createElement("input");
         let thisChildIndex = inputId;
+        
         imageInput.type = "file";
         imageInput.id = "im" + inputId;
         imageInput.className = "input";
-        imageItemList.push(imageItem(inputId));
-        imageInput.onchange = function() {updatePreview(thisChildIndex, imageInput);};
+
+        imageItemList.push(imageItem(inputId, "NONE"));
+        imageInput.onchange = function() {
+            updatePreview(thisChildIndex, imageInput);
+            var file = imageInput.files[0];
+            // Updates information on the input file type
+            var fileType = file.type;// returns "<type>/<file subtype>"
+            fileType = fileType.substring(fileType.indexOf('/') + 1, fileType.length); // slice the "<type>/"" off
+            imageItemList[thisChildIndex]["type"] = fileType;
+        };
 
         // Animation
         imageInput.style.scale = 0;
@@ -254,14 +312,11 @@
     // Use API to combine files into PDF
     function combine(){   
         const fileReader = new FileReader();
-        readImage(0);
-        let headerImgSrc = ""; // used for filebase
+        const pdfFileReader = new FileReader();
+        var pdfInitId = 0;
 
-        function readImage(idInt){
-            if(idInt >= imageDiv.childElementCount) return;
-            var imageItem = imageItemList[idInt];
-            var img = new Image();
-            var id = "im" + idInt;
+        function getFile(id){
+            // retrieve all input files
             var files = document.getElementById(id).files;
             if(files[0] == null){
                 warning.innerHTML = "File not selected!";
@@ -274,9 +329,81 @@
             else{
                 warning.innerHTML = "";
             }
-            var file = files[0];
-            
+            return files[0];
+        }
+       
+
+        // check if any file is pdf typed.
+        for(i = 0; i < imageItemList.length; i ++){
+            let item = imageItemList[i];
+            if(item["type"] == "pdf"){
+                //set up PDFDocument
+                initializePDFCombine(item["id"]);
+                pdfInitId = item["id"];
+                // pdf typed file need PDFLib treatment
+                readImagePdf(0);
+                break;
+            }
+            else{ // if not pdf, then use jspdf treatment
+                readImage(0);
+                break;
+            }
+        }
+
+        let headerImgSrc = ""; // used for filebase
+
+        // Initialize the PDFDocument base for every merging
+        function initializePDFCombine(pdfIndex){
+            const arrayFileReader = new FileReader();
+            arrayFileReader.onload = async function(e){
+                masterPdf = await PDFDocument.load(this.result);
+            }
+            arrayFileReader.readAsDataURL(getFile("im" + pdfIndex));
+        }
+
+        // Merge pdf files
+        function readImagePdf(listId){
+            if(listId >= imageDiv.childElementCount) return;
+            let id = "im" + pdfInitId;
+            var file = getFile(id);
+
+            pdfFileReader.onload = async function(e){
+                test.innerHTML = "primary file " + listId;
+                // If is last page, put downloadable to filebase.
+                if(listId == imageDiv.childElementCount - 1){
+                    updateFileBase(headerImgSrc);
+                }
+                // If id is the same as init id, do not need to copy since it is already initialized in the beginning
+                if(listId == pdfInitId){ readImagePdf(listId + 1);  return; };
+
+                // If the merging type is pdf, use addPage function to merge
+                if(imageItemList[listId]["type"] == "pdf"){
+                    test.innerHTML = "array file reader " + listId;   
+                    let copyPdf = await PDFDocument.load(this.result);
+                    let copiedPages = await masterPdf.copyPages(copyPdf, copyPdf.getPageIndices());
+                    copiedPages.forEach((page) => masterPdf.addPage(page));
+                    test.innerHTML = "array file reader done " + listId;   
+                }
+                // If the merging type is an image, use addPage then drawImage function to merge
+                else{
+
+                }
+
+                readImagePdf(listId + 1);
+            }
+            pdfFileReader.readAsArrayBuffer(file);
+        }
+
+        // Merge image files
+        function readImage(idInt){
+            if(idInt >= imageDiv.childElementCount) return;
+            var imageItem = imageItemList[idInt];
+            var img = new Image();
+            let id = "im" + idInt;
+            var file = getFile(id);
+
             fileReader.onload = function(e){
+                var fileType = imageItem["type"];
                 img.src = this.result;
                 if(idInt != 0){
                     doc.addPage();
@@ -289,24 +416,25 @@
                 // need to offset image as rotation is not around center
                 switch(imageItem.rotation){
                     case 0:
-                    doc.addImage(img,'JPG', 5 ,-190, 280, 200, null, null, 270);    
+                    doc.addImage(img,fileType, 5 ,-190, 280, 200, null, null, 270);    
                     break;
                     
                     case 90:
-                    doc.addImage(img,'JPG',5, 5, 200, 280, null, null, 0);
+                    doc.addImage(img,fileType ,5, 5, 200, 280, null, null, 0);
                     break;
 
                     case 180: 
                     test.innerHTML = 180 + "rot";
-                    doc.addImage(img,'JPG', 205, 90, 280, 200, null, null, 90);    
+                    doc.addImage(img,fileType , 205, 90, 280, 200, null, null, 90);    
                     break;
 
                     case 270:
                     test.innerHTML = 270 + "rot";
-                    doc.addImage(img,'JPG',205, -270, 200, 280, null, null, 180);
-                    break;
+                    doc.addImage(img,fileType ,205, -270, 200, 280, null, null, 180);
+                    break; 
                 }
 
+                // Update filebase with downloadble file with a "thumbnail" image
                 if(idInt == imageDiv.childElementCount - 1){
                     updateFileBase(headerImgSrc);
                 }
@@ -338,12 +466,12 @@
         fileButton.src = titleImgSrc;
         fileButton.className = "fileButton";
         fileButton.onmouseover = function() {
-            overlay.style.display = "block";
+            overlay.style.display = "flex";
         }
         overlay.onmouseleave = function() {
             overlay.style.display = "none";
         }
-        overlay.onclick = function(e) { download(); };
+        overlay.onclick = function(e) { process(); };
 
         fileBaseDiv.appendChild(name);
         container.appendChild(fileButton);
@@ -355,23 +483,37 @@
     function updatePreview(childIndex, element){
         var tgt = element || window.event.srcElement,
         files = element.files;
+        var fileDataURL = "";
 
         if (FileReader && files && files.length) {
+            // Filereader to retrieve data URL
             var fr = new FileReader();
+            var rotateButton = document.createElement("button");
+            var pdfEditButton = document.createElement("button");
+
             fr.onload = function () {
                 // Set up UI for transforming image
                 var previewContainer = previewDiv.childNodes[childIndex];
                 var preview = previewContainer.childNodes[0];
                 var overlay = document.createElement("div");
-                var rotateButton = document.createElement("button");
 
                 overlay.style.display = "flex";
                 overlay.className = "overlay";
 
                 rotateButton.innerHTML = "Rotate";
                 rotateButton.className = "optionItem";
+                pdfEditButton.innerHTML = "PDF Edit";
+                pdfEditButton.className = "optionItem";
+                pdfEditButton.style.color = "white";
+                pdfEditButton.style.background = "red";
 
-                overlay.appendChild(rotateButton);
+                
+                if(imageItemList[childIndex]["type"] == "pdf") { // only can edit if pdf
+                    overlay.appendChild(pdfEditButton);
+                }
+                else{ // pdf rotation will be edited in its own window
+                    overlay.appendChild(rotateButton);
+                }
                 previewContainer.appendChild(overlay);
 
                 preview.onmouseover = function() {
@@ -393,13 +535,135 @@
                     preview.style.transform = "rotate(" + rotation + "deg)";
                     test.innerHTML = rotation;
                 }
+
+                // Set preview image and save data url
                 preview.src = fr.result;
                 preview.className = "preview";
+                fileDataURL = fr.result;
             }
             fr.readAsDataURL(files[0]);
+
+            // Filereader to retrieve array buffer
+
+            var frBuffer = new FileReader();
+            frBuffer.onload = function(){
+                pdfEditButton.onclick = function(){displayPDFEditor(fileDataURL, frBuffer.result, childIndex)};
+            }
+            frBuffer.readAsArrayBuffer(files[0]);
         }
     }
 
+    // display page to edit pdf
+    async function displayPDFEditor(src, arraybuffer, childIndex){
+        var idIndex = 0;
+        /* pairs original idIndex to actual index.
+        This is necessary as the index of pages shift when one page is removed.
+        For example, the id to page index pair is {0:0, 1:1, 2:2}, 
+        when page 1 is removed, it becomes {0:0, 1:0, 2:1}, 
+        notice the original page 2 is at index 1 since the original page 1 doesn't exist anymore
+        */ 
+        var idToPage = {}; 
+
+        pdfDiv.style.display = "block";
+        pageOverlay.style.display = "block";
+        
+        // set up pdflib for modifying modfs
+        const pdfDoc = await PDFDocument.load(arraybuffer);
+        const pdfPages = pdfDoc.getPages();
+
+        // setup pdfjs for rendering each pdf pages
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.js";
+        var loadingTask = pdfjsLib.getDocument(src)
+        loadingTask.promise.then(function(pdf){
+            for(i = 1; i <= pdf.numPages; i ++){
+                pdf.getPage(i).then(function(page){
+                    idToPage[idIndex] = idIndex;
+
+                    var previewContainer = document.createElement("div");
+                    previewContainer.className = "preview";
+                    previewContainer.style.width = "50%";
+
+                    // render each page as image
+                    var scale = 1;                        
+                    var viewport = page.getViewport({ scale: scale });
+                    var canvas = document.createElement("canvas");
+                    var context = canvas.getContext('2d');
+                    canvas.width = Math.floor(viewport.width * scale);
+                    canvas.height = Math.floor(viewport.height * scale);
+                    canvas.style.width = "100%";
+                    canvas.style.height =  "100%";
+                    var transform = scale !== 1
+                    ? [scale, 0, 0, scale, 0, 0]
+                    : null;
+                    var renderContext = {
+                    canvasContext: context,
+                    transform: transform,
+                    viewport: viewport
+                    };
+                    page.render(renderContext);
+
+                    // add overlay
+                    var selectOverlay = document.createElement("button");
+                    selectOverlay.className = "overlay";
+                    selectOverlay.innerHTML = "Selected";
+
+                    // add remove button click event
+                    var removeButton = document.createElement("button");
+                    removeButton.className = "optionItem";
+                    var index = idIndex;
+                    removeButton.onclick = function(){
+                        // Cannot remove last page of pdf
+                        if(pdfDoc.getPageCount() < 1){
+                            return;
+                        }
+                        // remove page and remove preview
+                        pdfDoc.removePage(idToPage[index]);
+                        pdfDiv.removeChild(previewContainer);
+                        // Trasmute id-pageIndex pair
+                        transmuteIdValue(idToPage, index, pdf.numPages);
+                    };
+
+                    canvas.onmouseenter = function(){ selectOverlay.style.display = "flex"};
+                    selectOverlay.onmouseleave= function() { selectOverlay.style.display = "none"};
+
+                    selectOverlay.appendChild(removeButton);
+                    previewContainer.appendChild(canvas)
+                    previewContainer.appendChild(selectOverlay);
+                    pdfDiv.appendChild(previewContainer);
+
+                    idIndex ++;
+                });
+            }
+        });
+
+        var doneButton = document.createElement("button");
+        var cancelButton = document.createElement("button");
+        doneButton.innerHTML = "Done";
+        cancelButton.innerHTML = "Cancel";
+
+        doneButton.onclick = function(){
+            imageItemList[childIndex]["pdfDoc"] = pdfDoc;
+            hidePDFEditor();
+        };
+        cancelButton.onclick = function(){
+            hidePDFEditor();
+        };
+        pdfDiv.appendChild(doneButton);
+        pdfDiv.appendChild(cancelButton);
+    }
+   
+    // trasmutes an (int, int) key-value pair by subtracting 1 from values after an index
+    function transmuteIdValue(idValue, index, maxIndex){
+        for(i = index + 1; i < maxIndex; i ++){
+            idValue[i] -= 1;
+        }
+    }
+    function hidePDFEditor(){
+        //TODO: REMOVE ONLY IMAGE CHILD
+        pdfDiv.removeChild(pdfDiv.lastChild);
+        pdfDiv.style.display = "none";
+        pageOverlay.style.display = "none";
+    }
     // Handler to delete preview images
     function removePreview(childIndex){
         var preview = previewDiv.childNodes[childIndex];
@@ -411,7 +675,13 @@
         outputName.style.border = savedBorder;
     }
 
-    function download(){
-        doc.save(fileName);
+    async function process(){
+        if(masterPdf != null){
+            var pdfBytes = await masterPdf.save();
+            download(pdfBytes, fileName, "application/pdf");
+        }
+        else{
+            doc.save(fileName);
+        }
     }
 </script>
