@@ -121,7 +121,6 @@
     .preview{
         position: relative;
         border: 1px solid black;
-        margin: 20px;
         height: 300px;
         width: 300px;
     }
@@ -255,30 +254,46 @@
         inputId ++;
     }
 
+    var removeAnimationId = null;
+    var removePreview = null;
+    var removeImageInput = null;
     // Remove image from file input list, then remove preview image
     function removeImg(){
-        var imageInput = imageDiv.lastElementChild;
-        var preview = previewDiv.lastElementChild;
+        // If no element, then return
+        if(imageDiv.childElementCount == 0){
+            return;
+        }
+
+        // If animation is running, force end animation and execute removal
+        if(removeAnimationId != null && removePreview != null){
+            removeAction();
+        }
+
+        removeImageInput = imageDiv.lastElementChild;
+        removePreview =  previewDiv.lastElementChild;
         imageItemList.pop();
         // Animation
-        let id = null;
-        id = setInterval(moveHandler);
+        removeAnimationId = setInterval(moveHandler);
         let t = 0.15;
         function moveHandler(){
-            if(parseFloat(imageInput.style.scale) <= 0){
-                clearInterval(id);
-                imageDiv.lastElementChild.remove();
-                removePreview(parseInt(imageInput.id.charAt(imageDiv.id.length - 1)));
-                inputId --;
+            if(parseFloat(removeImageInput.style.scale) <= 0){
+                removeAction();
             }
             else{
-                var currentScale = parseFloat(imageInput.style.scale);
-                test.innerHTML = currentScale;
-                imageInput.style.scale = currentScale - t * t;
-                preview.style.scale = currentScale - t * t;
+                test.innerHTML = parseFloat(removeImageInput.style.scale);
+                var currentScale = parseFloat(removeImageInput.style.scale);
+                removeImageInput.style.scale = currentScale - t * t;
+                removePreview.style.scale = currentScale - t * t;
             }
         }
-        imageDiv.appendChild(imageInput);
+        // remove image input, preview image, change inputId, then nullify animation Id
+        function removeAction(){
+            clearInterval(removeAnimationId);
+            imageDiv.removeChild(removeImageInput);
+            previewDiv.removeChild(removePreview);
+            inputId --;
+            removeAnimationId = null;
+        }
     }
 
     // Clear file of all inputs 
@@ -744,12 +759,6 @@
         pdfDiv.style.display = "none";
         pageOverlay.style.display = "none";
     }
-    // Handler to delete preview images
-    function removePreview(childIndex){
-        var preview = previewDiv.childNodes[childIndex];
-        preview.remove();
-    }
-
     function saveName(){
         fileName = outputName.value;
         outputName.style.border = savedBorder;
