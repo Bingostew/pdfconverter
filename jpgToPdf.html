@@ -168,7 +168,7 @@
     const {PDFDocument, degrees} = PDFLib;
 
     var imageItem = function(id, type){
-        var obj = {"id" : id, "type" : type, "rotation":[0], pdfDoc:""};
+        var obj = {"id" : id, "type" : type, "rotation":[0], pdfDoc:"", initRotation:0};
 
         return obj;
     }
@@ -225,10 +225,10 @@
             var fileType = file.type;// returns "<type>/<file subtype>"
             fileType = fileType.substring(fileType.indexOf('/') + 1, fileType.length); // slice the "<type>/"" off
             imageItemList[thisChildIndex]["type"] = fileType;
-
+        
             // If pdf, then save pdf as PDFDocument for future use
             if(fileType == "pdf"){
-                const fileReader = new FileReader();
+                const fileReader = new FileReader(); 
                 fileReader.onload = async function(e){
                     imageItemList[thisChildIndex]["pdfDoc"] = await PDFDocument.load(this.result);
                 }
@@ -312,20 +312,6 @@
         doc = new window.jspdf.jsPDF();
     }
 
-    function setMetaSelector(id){
-        test.innerHTML = id;
-        var selector = document.getElementById(id);
-        metaInfo[id] = !metaInfo[id];
-        let selected = metaInfo[id];
-
-        if(selected){
-            selector.style.backgroundColor = "green";
-        }
-        else{
-            selector.style.backgroundColor = "white";
-        }
-    }
-
     // Use API to combine files into PDF
     function combine(){   
         const fileReader = new FileReader();
@@ -368,7 +354,7 @@
             }
         }
 
-        let headerImgSrc = ""; // used for filebase
+        var headerImgSrc = ""; // used for filebase
 
         // Initialize the PDFDocument base for every merging
         function initializePDFCombine(pdfIndex){
@@ -387,13 +373,27 @@
 
             pdfFileReader.onload = async function(e){
                 
-                // If is last page, put downloadable to filebase.
-                if(listId == imageDiv.childElementCount - 1){
-                    updateFileBase(headerImgSrc);
-                }
                 // If id is the same as init id, do not need to copy since it is already initialized in the beginning
-                if(listId == pdfInitId){ readImagePdf(listId + 1);  return; };
-                
+                if(listId == pdfInitId){
+                    // Get arraybuffer info from pdf using PDFLib, used to render pdf with PDFJS
+                    const srcReader = new FileReader();
+                    srcReader.onload = function(){
+                        headerImgSrc = this.result;
+                        readImagePdf(listId + 1); 
+                        // If only one page, directly process 
+                        if(listId == imageDiv.childElementCount - 1){
+                            updateFileBase(headerImgSrc, 0);
+                        }
+                        return; 
+                    };
+                    srcReader.readAsDataURL(base64ToBlob(await masterPdf.saveAsBase64()));
+                }
+                // If is last page, put downloadable to filebase.
+                else if(listId == imageDiv.childElementCount - 1){
+                    //TODO: thumbnail
+                    updateFileBase(headerImgSrc, 0);
+                }
+
                 // If the merging type is pdf, use addPage function to merge
                 if(imageItemList[listId]["type"] == "pdf"){ 
                     let copyPdf = imageItemList[listId]["pdfDoc"];
@@ -411,7 +411,7 @@
 
                     // Setting values based on rotation
                     let w, h, x, y, rot = 0;           
-                    switch(imageItemList[listId]["rotation"][0]){
+                    switch(imageItemList[listId].rotation[0]){
                         case 0:
                         x = 15; y = 830; w = 810; h = 570; rot = 270;
                         break;
@@ -432,7 +432,6 @@
                     // Using embedPng() or embedJpg() if file is png or jpg/jpeg
                     if(imageItemList[listId]["type"] == "png"){
                         bufferFileReader.onload = async function(e){
-                           // test.innerHTML = file.name;
                             image = await masterPdf.embedPng(this.result);
                             newpage.drawImage(image, {
                                 x:x, y:y, 
@@ -471,40 +470,46 @@
             var file = getFile(id);
 
             fileReader.onload = function(e){
-                var fileType = imageItem["type"];
+                test.innerHTML += "img rot " + imageItem.rotation[0];
                 img.src = this.result;
+                var fileType = imageItem["type"];
                 if(idInt != 0){
-                    doc.addPage();
+                doc.addPage();
                 }   
                 else{
                     headerImgSrc = this.result;
                 }
-
+                // Subtract current rotation from initial rotation in the Exif file,
+                // this is needed as initial rotation is added in the preview
+                var imageRot = (imageItem.rotation[0] - imageItem.initRotation) % 360;
+                test.innerHTML = " init rot " + imageItem.initRotation + " image rot " + imageItem.rotation[0] + " total rot " + imageRot;
                 // Handle image rotation
                 // need to offset image as rotation is not around center
-                switch(imageItem.rotation[0]){
+                switch(imageRot){
                     case 0:
-                    doc.addImage(img,fileType, 5 ,-190, 280, 200, null, null, 270);    
+                    doc.addImage(img,fileType ,5, 5, 200, 280, null, null, 0);
+                    //doc.addImage(img,fileType, 5 ,-190, 280, 200, null, null, 270);    
                     break;
                     
-                    case 90:
-                    doc.addImage(img,fileType ,5, 5, 200, 280, null, null, 0);
-                    break;
-
-                    case 180: 
-                    test.innerHTML = 180 + "rot";
+                    case 270:
+                    //doc.addImage(img,fileType ,5, 5, 200, 280, null, null, 0);
                     doc.addImage(img,fileType , 205, 90, 280, 200, null, null, 90);    
                     break;
 
-                    case 270:
-                    test.innerHTML = 270 + "rot";
+                    case 180: 
+                    //doc.addImage(img,fileType , 205, 90, 280, 200, null, null, 90);    
                     doc.addImage(img,fileType ,205, -270, 200, 280, null, null, 180);
+                    break;
+
+                    case 90:
+                    //doc.addImage(img,fileType ,205, -270, 200, 280, null, null, 180);
+                    doc.addImage(img,fileType, 5 ,-190, 280, 200, null, null, 270);
                     break; 
                 }
 
                 // Update filebase with downloadble file with a "thumbnail" image
                 if(idInt == imageDiv.childElementCount - 1){
-                    updateFileBase(headerImgSrc);
+                    updateFileBase(headerImgSrc, imageItemList[0].rotation[0]);
                 }
                 readImage(idInt + 1);
             };
@@ -512,9 +517,119 @@
         }
     }
 
+    function base64ToBlob(base64){
+        // Retrive decoded string
+        let decodedString = window.atob(base64);
+        const byteNumbers = new Array(decodedString.length);
+        // Create bytearray of UTF-16 encoded binary data from string
+        for(let i = 0; i < decodedString.length; i ++){
+            byteNumbers[i] = decodedString.charCodeAt(i);
+        }
+        // Create a bytearray (since Unicode uses 8-bit encoding) for blob
+        let bytes = new Uint8Array(byteNumbers);
+        return new Blob([bytes], {type:"application/pdf"});
+    }
+
+    // Retrieves the orientation in the EXIF file
+    // Then resets the orientation
+    function zeroOrientation(file, callback) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+
+            var view = new DataView(e.target.result);
+            if (view.getUint16(0, false) != 0xFFD8)
+            {
+                return -2;
+            }
+            var length = view.byteLength, offset = 2;
+            while (offset < length) 
+            {
+                if (view.getUint16(offset+2, false) <= 8) return  -1;
+                var marker = view.getUint16(offset, false);
+                offset += 2;
+                if (marker == 0xFFE1) 
+                {
+                    if (view.getUint32(offset += 2, false) != 0x45786966) 
+                    {
+                        return -1;
+                    }
+
+                    var little = view.getUint16(offset += 6, false) == 0x4949;
+                    offset += view.getUint32(offset + 4, little);
+                    var tags = view.getUint16(offset, little);
+                    offset += 2;
+                    for (var i = 0; i < tags; i++)
+                    {
+                        if (view.getUint16(offset + (i * 12), little) == 0x0112)
+                        {
+                            return resetOrientation(file, view.getUint16(offset + (i * 12) + 8, little), callback);
+                        }
+                    }
+                }
+                else if ((marker & 0xFF00) != 0xFF00)
+                {
+                    break;
+                }
+                else
+                { 
+                    offset += view.getUint16(offset, false);
+                }
+            }
+            return -1;
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    // Some images have preset orientations. Info found in its EXIF file
+    // This method resets orientation to 0
+    function resetOrientation(file, srcOrientation, callback) {
+        test.innerHTML += "dataview: " + srcOrientation;
+        var img = new Image();
+
+        img.onload = function() {
+            var width = img.width,
+                height = img.height,
+                canvas = document.createElement('canvas'),
+                ctx = canvas.getContext("2d");
+
+            // set proper canvas dimensions before transform & export
+            if (4 < srcOrientation && srcOrientation < 9) {
+            canvas.width = height;
+            canvas.height = width;
+            } else {
+            canvas.width = width;
+            canvas.height = height;
+            }
+
+            // transform context before drawing image
+            switch (srcOrientation) {
+            case 2: ctx.transform(-1, 0, 0, 1, width, 0); break;
+            case 3: ctx.transform(-1, 0, 0, -1, width, height); break;
+            case 4: ctx.transform(1, 0, 0, -1, 0, height); break;
+            case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;
+            case 6: ctx.transform(0, 1, -1, 0, height, 0); break;
+            case 7: ctx.transform(0, -1, -1, 0, height, width); break;
+            case 8: ctx.transform(0, -1, 1, 0, 0, width); break;
+            default: break;
+            }
+
+            // draw image
+            ctx.drawImage(img, 0, 0);
+
+            // export base64
+            callback(canvas.toDataURL(), srcOrientation);
+        }
+
+        var fileReader = new FileReader();
+        fileReader.onload = function(){
+            img.src = this.result;
+        }
+        fileReader.readAsDataURL(file);
+    }
+
 
     // Add downloadable buttons to the filebase column
-    function updateFileBase(titleImgSrc){
+    function updateFileBase(titleImgSrc, rot){
         var container = document.createElement("div");
         var fileButton = document.createElement("img");
         var overlay = document.createElement("div");
@@ -532,6 +647,7 @@
         overlay.className = "overlay";
 
         fileButton.src = titleImgSrc;
+        fileButton.style.transform = "rotate(" + rot + "deg)";
         fileButton.className = "fileButton";
         fileButton.onmouseover = function() {
             overlay.style.display = "flex";
@@ -558,11 +674,17 @@
             var fr = new FileReader();
             var rotateButton = document.createElement("button");
             var pdfEditButton = document.createElement("button");
+            var imageItem = imageItemList[childIndex];
 
             fr.onload = function () {
+                // reset data of preview info
+                imageItem.rotation = [0];
+                imageItem.initRotation = 0;
+
                 // Set up UI for transforming image
                 var previewContainer = previewDiv.childNodes[childIndex];
                 var preview = previewContainer.childNodes[0];
+                preview.style.transform = "rotate(" + 0 + "deg)";
                 var overlay = document.createElement("div");
 
                 overlay.style.display = "flex";
@@ -593,7 +715,6 @@
 
                 // Rotation transform
                 rotateButton.onclick = function(){
-                    let imageItem = imageItemList[childIndex];
                     let rotation = imageItem.rotation[0];
                     rotation += 90;
                     if(rotation >= 360){
@@ -601,11 +722,41 @@
                     }
                     imageItem.rotation[0] = rotation;
                     preview.style.transform = "rotate(" + rotation + "deg)";
-                    test.innerHTML = rotation;
                 }
-
-                // Set preview image and save data url
-                preview.src = fr.result;
+                
+                // Preview rotation: Because image files may have preset rotation in its Exif
+                // file, the image is rotated to reflect its normal rotation
+                // The orientation number is as such: 
+                // 1: 0deg
+                // 3: 180deg
+                // 6: -90deg
+                // 8: 90deg
+                if(imageItem.type != "pdf"){  
+                     zeroOrientation(files[0], function(src, rotation){       
+                        test.innerHTML = " rot " + rotation;
+                         switch(rotation){
+                            case 6:
+                                imageItem.rotation[0] = 270;
+                                imageItem.initRotation = -90;
+                                preview.style.transform = "rotate(" + 270 + "deg)";
+                                break;
+                            case 8:
+                                imageItem.rotation[0] = 90;
+                                imageItem.initRotation = 90;
+                                preview.style.transform = "rotate(" + 90 + "deg)";
+                                break;
+                            case 3:
+                                imageItem.rotation[0] = 180;
+                                imageItem.initRotation = 180;
+                                preview.style.transform = "rotate(" +  180 + "deg)";
+                                break;
+                         }
+                         preview.src = fr.result;
+                    });
+                }
+                else{
+                    preview.src = fr.result;
+                }
                 preview.className = "preview";
                 fileDataURL = fr.result;
             }
@@ -715,8 +866,8 @@
                         }
                         imageItem.rotation[index] = rotation;
                         canvas.style.transform = "rotate(" + rotation + "deg)";
-                        test.innerHTML += imageItemList[childIndex].rotation[index] + " ";
-           
+                        var pdfPages = pdfDoc.getPages();
+                        pdfPages[index].setRotation(degrees(rotation));           
                     };
 
                     canvas.onmouseenter = function(){ selectOverlay.style.display = "flex"};
@@ -738,9 +889,16 @@
         doneButton.className = "button";
         doneButton.margin = "auto";
 
-        doneButton.onclick = function(){
+        doneButton.onclick = async function(){
             imageItemList[childIndex]["pdfDoc"] = pdfDoc;
-            
+            const srcFileReader = new FileReader();
+
+            // Update the preview after edit
+            srcFileReader.onload = function(){
+                let preview = previewDiv.childNodes[childIndex].childNodes[0];
+                preview.src = this.result;
+            };
+            srcFileReader.readAsDataURL(base64ToBlob(await pdfDoc.saveAsBase64()));
             hidePDFEditor();
         };
 
