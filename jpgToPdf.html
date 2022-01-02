@@ -11,16 +11,17 @@
 </div>
 
 <span id = "warning"></span>
-
 <br>
-<button onclick="addImg();" class = "button" >Add File</button>
+<div id = "addSpace" class = "stext" ondrop="addImg(event);" ondragover="addSpaceDragOver(event);" ondragleave="addSpaceDragLeave(event);">
+    Add Files Here
+</div>
+<br>
 <button onclick="removeImg();" class = "button" >Remove File</button>
 <button onclick="clearImg();" class = "button" >Clear Files</button>
 <button onclick="combine();" class = "button"> Process</button>
 <br>
 
 <div id = "workContainer" >
-<div id = "imc" ></div>
 <div id = "preview" style="display: flex; flex-direction: column; width:30%"></div>
 <div id = "fileBase" style="display: flex; flex-direction: column; width:30%; float:right;"></div>
 </div>
@@ -53,6 +54,16 @@
         width: 100%;
         height: 100%;
         background-color: #3d3d3dc4;
+    }
+    #addSpace{
+        width: 95%;
+        height: 100px;
+        margin: auto;
+        text-align: center;
+        vertical-align: middle;
+        line-height: 100px;
+        color: black;
+        outline: 4px dashed gray;
     }
     #workContainer{
         display: flex;
@@ -92,9 +103,6 @@
     }
     #warning{
         color: red;
-    }
-    #imc{
-        width: 25%;
     }
     #pdfEditor{
         position:absolute;
@@ -175,7 +183,7 @@
     var imageItemList = [];
 
     var pageOverlay = document.getElementById("pageOverlay");
-    var imageDiv = document.getElementById("imc");
+    var addSpaceDiv = document.getElementById("addSpace");
     var previewDiv = document.getElementById("preview");
     var fileBaseDiv = document.getElementById("fileBase");
     var pdfDiv = document.getElementById("pdfEditor");
@@ -195,48 +203,63 @@
     var previewImgSrc = "https://i.ibb.co/6DtpSNY/Screen-Shot-2021-11-19-at-9-30-15-PM.png";
 
     outputName.onfocus = function(){outputName.style.border = unsavedBorder};
+    function addSpaceDragOver(ev)
+    {
+        //Prevent default actions
+        ev.preventDefault();
+        addSpaceDiv.style.backgroundColor="gray";
+    };
+    function addSpaceDragLeave(ev)
+    {
+        addSpaceDiv.style.backgroundColor="white";
+    }
     // Adding a file input, then add a preview image
-    function addImg(){
+    function addImg(ev){
 
-        // Add to preview
-        var previewContainer = document.createElement("div");
-        var previewImg = document.createElement("img");
+        //Prevent default actions
+        ev.preventDefault();
 
-        previewContainer.className = "preview";
+        if(ev.dataTransfer.items){
+            for(var i = 0; i < ev.dataTransfer.items.length; i ++){
+                var thisChildIndex = inputId;
+                if(ev.dataTransfer.items[i].kind === 'file'){
+                    // Add to preview
+                    var previewContainer = document.createElement("div");
+                    var previewImg = document.createElement("img");
 
-        previewImg.className = "preview";
-        previewImg.src = previewImgSrc;
-        previewContainer.appendChild(previewImg);
-        previewDiv.appendChild(previewContainer);
+                    previewContainer.className = "preview";
 
-        // Add input file
-        var imageInput = document.createElement("input");
-        let thisChildIndex = inputId;
-        
-        imageInput.type = "file";
-        imageInput.id = "im" + inputId;
-        imageInput.className = "input";
+                    previewImg.className = "preview";
+                    previewImg.src = previewImgSrc;
+                    previewContainer.appendChild(previewImg);
+                    previewDiv.appendChild(previewContainer);
 
-        imageItemList.push(imageItem(inputId, "NONE"));
-        imageInput.onchange = function() {
-            updatePreview(thisChildIndex, imageInput);
-            var file = imageInput.files[0];
-            // Updates information on the input file type
-            var fileType = file.type;// returns "<type>/<file subtype>"
-            fileType = fileType.substring(fileType.indexOf('/') + 1, fileType.length); // slice the "<type>/"" off
-            imageItemList[thisChildIndex]["type"] = fileType;
-        
-            // If pdf, then save pdf as PDFDocument for future use
-            if(fileType == "pdf"){
-                const fileReader = new FileReader(); 
-                fileReader.onload = async function(e){
-                    imageItemList[thisChildIndex]["pdfDoc"] = await PDFDocument.load(this.result);
+                    // retrieve file from drag and drop
+                    var file = ev.dataTransfer.items[i].getAsFile();
+
+                    // Updates information on the input file type
+                    var fileType = file.type;// returns "<type>/<file subtype>"
+                    fileType = fileType.substring(fileType.indexOf('/') + 1, fileType.length); // slice the "<type>/"" off
+                    imageItemList.push(imageItem(thisChildIndex, fileType));
+                
+                    // If pdf, then save pdf as PDFDocument for future use
+                    if(fileType == "pdf"){
+                        const fileReader = new FileReader(); 
+                        fileReader.onload = async function(e){
+                            imageItemList[thisChildIndex]["pdfDoc"] = await PDFDocument.load(this.result);
+                        }
+                        fileReader.readAsArrayBuffer(file);
+                    }
+
+                    // update preview thumbnail
+                    updatePreview(thisChildIndex, file);
                 }
-                fileReader.readAsArrayBuffer(file);
+                inputId ++;
             }
-        };
+        }
 
         // Animation
+        /*
         imageInput.style.scale = 0;
         let id = null;
         id = setInterval(moveHandler);
@@ -250,8 +273,8 @@
                 imageInput.style.scale = currentScale + t * t ;
             }
         }
-        imageDiv.appendChild(imageInput);
-        inputId ++;
+        imageDiv.appendChild(imageInput);*/
+        addSpaceDragLeave(event);
     }
 
     var removeAnimationId = null;
@@ -664,12 +687,8 @@
     }
 
     // Handler to update preview images
-    function updatePreview(childIndex, element){
-        var tgt = element || window.event.srcElement,
-        files = element.files;
-        var fileDataURL = "";
-
-        if (FileReader && files && files.length) {
+    function updatePreview(childIndex, file){
+        if (FileReader) {
             // Filereader to retrieve data URL
             var fr = new FileReader();
             var rotateButton = document.createElement("button");
@@ -732,7 +751,7 @@
                 // 6: -90deg
                 // 8: 90deg
                 if(imageItem.type != "pdf"){  
-                     zeroOrientation(files[0], function(src, rotation){       
+                     zeroOrientation(file, function(src, rotation){       
                         test.innerHTML = " rot " + rotation;
                          switch(rotation){
                             case 6:
@@ -760,7 +779,7 @@
                 preview.className = "preview";
                 fileDataURL = fr.result;
             }
-            fr.readAsDataURL(files[0]);
+            fr.readAsDataURL(file);
 
             pdfEditButton.onclick = function(){displayPDFEditor(fileDataURL, childIndex)};
         }
@@ -893,7 +912,7 @@
             imageItemList[childIndex]["pdfDoc"] = pdfDoc;
             const srcFileReader = new FileReader();
 
-            // Update the preview after edit
+            // Update the preview after edit,
             srcFileReader.onload = function(){
                 let preview = previewDiv.childNodes[childIndex].childNodes[0];
                 preview.src = this.result;
