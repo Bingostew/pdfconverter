@@ -181,6 +181,7 @@
         return obj;
     }
     var imageItemList = [];
+    var inputFileList = {};
 
     var pageOverlay = document.getElementById("pageOverlay");
     var addSpaceDiv = document.getElementById("addSpace");
@@ -236,6 +237,7 @@
 
                     // retrieve file from drag and drop
                     var file = ev.dataTransfer.items[i].getAsFile();
+                    inputFileList[thisChildIndex] = file;
 
                     // Updates information on the input file type
                     var fileType = file.type;// returns "<type>/<file subtype>"
@@ -272,8 +274,7 @@
                 var currentScale = parseFloat(imageInput.style.scale);
                 imageInput.style.scale = currentScale + t * t ;
             }
-        }
-        imageDiv.appendChild(imageInput);*/
+        }*/
         addSpaceDragLeave(event);
     }
 
@@ -283,7 +284,7 @@
     // Remove image from file input list, then remove preview image
     function removeImg(){
         // If no element, then return
-        if(imageDiv.childElementCount == 0){
+        if(previewDiv.childElementCount == 0){
             return;
         }
 
@@ -292,9 +293,9 @@
             removeAction();
         }
 
-        removeImageInput = imageDiv.lastElementChild;
         removePreview =  previewDiv.lastElementChild;
         imageItemList.pop();
+        
         // Animation
         removeAnimationId = setInterval(moveHandler);
         let t = 0.15;
@@ -309,22 +310,20 @@
                 removePreview.style.scale = currentScale - t * t;
             }
         }
-        // remove image input, preview image, change inputId, then nullify animation Id
+        // remove preview image, then nullify animation Id
         function removeAction(){
             clearInterval(removeAnimationId);
-            imageDiv.removeChild(removeImageInput);
             previewDiv.removeChild(removePreview);
-            inputId --;
             removeAnimationId = null;
         }
     }
 
     // Clear file of all inputs 
     function clearImg(){
-        for(var i = 0; i < imageDiv.childElementCount; i ++){
-            imageDiv.childNodes[i].value = "";
+        for(var i = 0; i < Object.values(inputFileList).length; i ++){
             var previewContainer = previewDiv.childNodes[i];
             previewContainer.childNodes[0].src = previewImgSrc;
+            inputFileList = {};
             previewContainer.childNodes.forEach(function(item, index){
                 if(index == 0) return;
                 previewContainer.removeChild(item);
@@ -343,8 +342,8 @@
 
         function getFile(id){
             // retrieve all input files
-            var files = document.getElementById(id).files;
-            if(files[0] == null){
+            var files = Object.values(inputFileList);
+            if(files[id] == null){
                 warning.innerHTML = "File not selected!";
                 return;
             }
@@ -354,7 +353,7 @@
             }
             else{
                 warning.innerHTML = "";
-                return files[0];
+                return files[id];
             }
         }
        
@@ -389,22 +388,22 @@
         }
 
         // Merge pdf files
-        function readImagePdf(listId){
-            if(listId >= imageDiv.childElementCount) return;
-            let id = "im" + listId;
+        function readImagePdf(id){
+            var fileLength = Object.values(inputFileList).length;
+            if(id >= fileLength) return;
             var file = getFile(id);
 
             pdfFileReader.onload = async function(e){
                 
                 // If id is the same as init id, do not need to copy since it is already initialized in the beginning
-                if(listId == pdfInitId){
+                if(id == pdfInitId){
                     // Get arraybuffer info from pdf using PDFLib, used to render pdf with PDFJS
                     const srcReader = new FileReader();
                     srcReader.onload = function(){
                         headerImgSrc = this.result;
-                        readImagePdf(listId + 1); 
+                        readImagePdf(id + 1); 
                         // If only one page, directly process 
-                        if(listId == imageDiv.childElementCount - 1){
+                        if(id == fileLength - 1){
                             updateFileBase(headerImgSrc, 0);
                         }
                         return; 
@@ -412,14 +411,13 @@
                     srcReader.readAsDataURL(base64ToBlob(await masterPdf.saveAsBase64()));
                 }
                 // If is last page, put downloadable to filebase.
-                else if(listId == imageDiv.childElementCount - 1){
-                    //TODO: thumbnail
+                else if(id == fileLength - 1){
                     updateFileBase(headerImgSrc, 0);
                 }
 
                 // If the merging type is pdf, use addPage function to merge
-                if(imageItemList[listId]["type"] == "pdf"){ 
-                    let copyPdf = imageItemList[listId]["pdfDoc"];
+                if(imageItemList[id]["type"] == "pdf"){ 
+                    let copyPdf = imageItemList[id]["pdfDoc"];
                     var pageIndeces = [];
                     for(i = 0; i < copyPdf.getPageCount(); i++){
                         pageIndeces.push(i);
@@ -434,7 +432,7 @@
 
                     // Setting values based on rotation
                     let w, h, x, y, rot = 0;           
-                    switch(imageItemList[listId].rotation[0]){
+                    switch(imageItemList[id].rotation[0]){
                         case 0:
                         x = 15; y = 830; w = 810; h = 570; rot = 270;
                         break;
@@ -453,7 +451,7 @@
                     }
                     
                     // Using embedPng() or embedJpg() if file is png or jpg/jpeg
-                    if(imageItemList[listId]["type"] == "png"){
+                    if(imageItemList[id]["type"] == "png"){
                         bufferFileReader.onload = async function(e){
                             image = await masterPdf.embedPng(this.result);
                             newpage.drawImage(image, {
@@ -485,18 +483,18 @@
         }
 
         // Merge image files
-        function readImage(idInt){
-            if(idInt >= imageDiv.childElementCount) return;
-            var imageItem = imageItemList[idInt];
+        function readImage(id){
+            var fileLength = Object.values(inputFileList).length;
+            if(id >= fileLength) return;
+            var imageItem = imageItemList[id];
             var img = new Image();
-            let id = "im" + idInt;
             var file = getFile(id);
 
             fileReader.onload = function(e){
                 test.innerHTML += "img rot " + imageItem.rotation[0];
                 img.src = this.result;
                 var fileType = imageItem["type"];
-                if(idInt != 0){
+                if(id != 0){
                 doc.addPage();
                 }   
                 else{
@@ -531,10 +529,10 @@
                 }
 
                 // Update filebase with downloadble file with a "thumbnail" image
-                if(idInt == imageDiv.childElementCount - 1){
+                if(id == fileLength - 1){
                     updateFileBase(headerImgSrc, imageItemList[0].rotation[0]);
                 }
-                readImage(idInt + 1);
+                readImage(id + 1);
             };
             fileReader.readAsDataURL(file);
         }
