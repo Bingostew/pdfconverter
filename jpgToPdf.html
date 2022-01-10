@@ -222,8 +222,8 @@
 
         if(ev.dataTransfer.items){
             for(var i = 0; i < ev.dataTransfer.items.length; i ++){
-                var thisChildIndex = inputId;
                 if(ev.dataTransfer.items[i].kind === 'file'){
+                    let thisChildIndex = inputId;
                     // Add to preview
                     var previewContainer = document.createElement("div");
                     var previewImg = document.createElement("img");
@@ -249,6 +249,7 @@
                         const fileReader = new FileReader(); 
                         fileReader.onload = async function(e){
                             imageItemList[thisChildIndex]["pdfDoc"] = await PDFDocument.load(this.result);
+                           // test.innerHTML += imageItemList[thisChildIndex]["pdfDoc"].getPageCount();
                         }
                         fileReader.readAsArrayBuffer(file);
                     }
@@ -336,8 +337,6 @@
 
     // Use API to combine files into PDF
     function combine(){   
-        const fileReader = new FileReader();
-        const pdfFileReader = new FileReader();
         var pdfInitId = 0;
 
         function getFile(id){
@@ -363,7 +362,6 @@
             let item = imageItemList[i];
             if(item["type"] == "pdf"){
                 //set up PDFDocument
-                //initializePDFCombine(item["id"]);
                 masterPdf = item["pdfDoc"];
                 pdfInitId = item["id"];
                 // pdf typed file need PDFLib treatment
@@ -378,21 +376,13 @@
 
         var headerImgSrc = ""; // used for filebase
 
-        // Initialize the PDFDocument base for every merging
-        function initializePDFCombine(pdfIndex){
-            const arrayFileReader = new FileReader();
-            arrayFileReader.onload = async function(e){
-                masterPdf = await PDFDocument.load(this.result);
-            }
-            arrayFileReader.readAsDataURL(getFile("im" + pdfIndex));
-        }
-
         // Merge pdf files
         function readImagePdf(id){
             var fileLength = Object.values(inputFileList).length;
             if(id >= fileLength) return;
             var file = getFile(id);
-
+            test.innerHTML += " id:" + id + " ";
+            const pdfFileReader = new FileReader();
             pdfFileReader.onload = async function(e){
                 
                 // If id is the same as init id, do not need to copy since it is already initialized in the beginning
@@ -401,7 +391,6 @@
                     const srcReader = new FileReader();
                     srcReader.onload = function(){
                         headerImgSrc = this.result;
-                        readImagePdf(id + 1); 
                         // If only one page, directly process 
                         if(id == fileLength - 1){
                             updateFileBase(headerImgSrc, 0);
@@ -477,13 +466,14 @@
                     }
                 }
 
-                readImagePdf(listId + 1);
+                readImagePdf(id + 1);
             }
             pdfFileReader.readAsArrayBuffer(file);
         }
 
         // Merge image files
         function readImage(id){
+            const fileReader = new FileReader();
             var fileLength = Object.values(inputFileList).length;
             if(id >= fileLength) return;
             var imageItem = imageItemList[id];
