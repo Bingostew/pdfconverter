@@ -16,7 +16,6 @@
     Add Files Here
 </div>
 <br>
-<button onclick="removeImg();" class = "button" >Remove File</button>
 <button onclick="clearImg();" class = "button" >Clear Files</button>
 <button onclick="combine();" class = "button"> Process</button>
 <br>
@@ -227,7 +226,6 @@
                     // Add to preview
                     var previewContainer = document.createElement("div");
                     var previewImg = document.createElement("img");
-
                     previewContainer.className = "preview";
 
                     previewImg.className = "preview";
@@ -255,7 +253,7 @@
                     }
 
                     // update preview thumbnail
-                    updatePreview(thisChildIndex, file);
+                    updatePreview(previewContainer, thisChildIndex, file);
                 }
                 inputId ++;
             }
@@ -279,57 +277,12 @@
         addSpaceDragLeave(event);
     }
 
-    var removeAnimationId = null;
-    var removePreview = null;
-    var removeImageInput = null;
-    // Remove image from file input list, then remove preview image
-    function removeImg(){
-        // If no element, then return
-        if(previewDiv.childElementCount == 0){
-            return;
-        }
-
-        // If animation is running, force end animation and execute removal
-        if(removeAnimationId != null && removePreview != null){
-            removeAction();
-        }
-
-        removePreview =  previewDiv.lastElementChild;
-        imageItemList.pop();
-        
-        // Animation
-        removeAnimationId = setInterval(moveHandler);
-        let t = 0.15;
-        function moveHandler(){
-            if(parseFloat(removeImageInput.style.scale) <= 0){
-                removeAction();
-            }
-            else{
-                test.innerHTML = parseFloat(removeImageInput.style.scale);
-                var currentScale = parseFloat(removeImageInput.style.scale);
-                removeImageInput.style.scale = currentScale - t * t;
-                removePreview.style.scale = currentScale - t * t;
-            }
-        }
-        // remove preview image, then nullify animation Id
-        function removeAction(){
-            clearInterval(removeAnimationId);
-            previewDiv.removeChild(removePreview);
-            removeAnimationId = null;
-        }
-    }
-
     // Clear file of all inputs 
     function clearImg(){
         for(var i = 0; i < Object.values(inputFileList).length; i ++){
-            var previewContainer = previewDiv.childNodes[i];
-            previewContainer.childNodes[0].src = previewImgSrc;
-            inputFileList = {};
-            previewContainer.childNodes.forEach(function(item, index){
-                if(index == 0) return;
-                previewContainer.removeChild(item);
-            });
+            previewDiv.removeChild(previewDiv.lastElementChild);
         }
+        inputFileList = {};
 
         // Create a new doc.
         doc = new window.jspdf.jsPDF();
@@ -481,7 +434,6 @@
             var file = getFile(id);
 
             fileReader.onload = function(e){
-                test.innerHTML += "img rot " + imageItem.rotation[0];
                 img.src = this.result;
                 var fileType = imageItem["type"];
                 if(id != 0){
@@ -675,12 +627,13 @@
     }
 
     // Handler to update preview images
-    function updatePreview(childIndex, file){
+    function updatePreview(previewContainer, childIndex, file){
         if (FileReader) {
             // Filereader to retrieve data URL
             var fr = new FileReader();
             var rotateButton = document.createElement("button");
             var pdfEditButton = document.createElement("button");
+            var deleteButton = document.createElement("button");
             var imageItem = imageItemList[childIndex];
 
             fr.onload = function () {
@@ -689,7 +642,6 @@
                 imageItem.initRotation = 0;
 
                 // Set up UI for transforming image
-                var previewContainer = previewDiv.childNodes[childIndex];
                 var preview = previewContainer.childNodes[0];
                 preview.style.transform = "rotate(" + 0 + "deg)";
                 var overlay = document.createElement("div");
@@ -703,8 +655,14 @@
                 pdfEditButton.className = "optionItem";
                 pdfEditButton.style.color = "white";
                 pdfEditButton.style.background = "red";
+                deleteButton.innerHTML = "X";
+                deleteButton.style.border = "none";
+                deleteButton.style.backgroundColor = "#FF4444"
+                deleteButton.style.position = "absolute";
+                deleteButton.style.right = 0;
+                deleteButton.style.top = 0;
 
-                
+                overlay.appendChild(deleteButton);
                 if(imageItemList[childIndex]["type"] == "pdf") { // only can edit if pdf
                     overlay.appendChild(pdfEditButton);
                 }
@@ -730,6 +688,11 @@
                     imageItem.rotation[0] = rotation;
                     preview.style.transform = "rotate(" + rotation + "deg)";
                 }
+
+                deleteButton.onclick = function(){
+                    previewDiv.removeChild(previewContainer);
+                    delete inputFileList[childIndex];
+                }
                 
                 // Preview rotation: Because image files may have preset rotation in its Exif
                 // file, the image is rotated to reflect its normal rotation
@@ -740,7 +703,6 @@
                 // 8: 90deg
                 if(imageItem.type != "pdf"){  
                      zeroOrientation(file, function(src, rotation){       
-                        test.innerHTML = " rot " + rotation;
                          switch(rotation){
                             case 6:
                                 imageItem.rotation[0] = 270;
