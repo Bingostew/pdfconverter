@@ -16,6 +16,7 @@
     Add Files Here
 </div>
 <br>
+<button onclick="reverseImgOrder();" class = "button" >Reverse</button>
 <button onclick="clearImg();" class = "button" >Clear Files</button>
 <button onclick="combine();" class = "button"> Process</button>
 <br>
@@ -175,13 +176,12 @@
 <script>
     const {PDFDocument, degrees} = PDFLib;
 
-    var imageItem = function(id, type){
-        var obj = {"id" : id, "type" : type, "rotation":[0], pdfDoc:"", initRotation:0};
+    var imageItem = function(id, type, file){
+        var obj = {"id" : id, "type" : type, "file" : file, "rotation":[0], pdfDoc:"", initRotation:0};
 
         return obj;
     }
     var imageItemList = [];
-    var inputFileList = {};
 
     var pageOverlay = document.getElementById("pageOverlay");
     var addSpaceDiv = document.getElementById("addSpace");
@@ -236,12 +236,11 @@
 
                     // retrieve file from drag and drop
                     var file = ev.dataTransfer.items[i].getAsFile();
-                    inputFileList[thisChildIndex] = file;
 
                     // Updates information on the input file type
                     var fileType = file.type;// returns "<type>/<file subtype>"
                     fileType = fileType.substring(fileType.indexOf('/') + 1, fileType.length); // slice the "<type>/"" off
-                    imageItemList.push(imageItem(thisChildIndex, fileType));
+                    imageItemList.push(imageItem(thisChildIndex, fileType, file));
                 
                     // If pdf, then save pdf as PDFDocument for future use
                     if(fileType == "pdf"){
@@ -256,12 +255,10 @@
                     else if(fileType.toLowerCase() == "heic"){
                         heic2any({blob: file}).
                         then((res) => {
-                            file = res; updatePreview(previewContainer, thisChildIndex, res);
+                            file = res; 
                         });
                     }
-                    else{
-                        updatePreview(previewContainer, thisChildIndex, file);
-                    }
+                    updatePreview(previewContainer, thisChildIndex, file);
                 }
                 inputId ++;
             }
@@ -287,10 +284,10 @@
 
     // Clear file of all inputs 
     function clearImg(){
-        for(var i = 0; i < Object.values(inputFileList).length; i ++){
+        for(var i = 0; i < imageItemList.length; i ++){
             previewDiv.removeChild(previewDiv.lastElementChild);
         }
-        inputFileList = {};
+        imageItemList = [];
 
         // Create a new doc.
         doc = new window.jspdf.jsPDF();
@@ -302,8 +299,8 @@
 
         function getFile(id){
             // retrieve all input files
-            var files = Object.values(inputFileList);
-            if(files[id] == null){
+            var imageItem = imageItemList[id];
+            if(imageItem == null){
                 warning.innerHTML = "File not selected!";
                 return;
             }
@@ -313,7 +310,7 @@
             }
             else{
                 warning.innerHTML = "";
-                return files[id];
+                return imageItemList[id]["file"];
             }
         }
        
@@ -339,7 +336,7 @@
 
         // Merge pdf files
         function readImagePdf(id){
-            var fileLength = Object.values(inputFileList).length;
+            var fileLength = imageItemList.length;
             if(id >= fileLength) return;
             var file = getFile(id);
             test.innerHTML += " id:" + id + " ";
@@ -435,7 +432,7 @@
         // Merge image files
         function readImage(id){
             const fileReader = new FileReader();
-            var fileLength = Object.values(inputFileList).length;
+            var fileLength = imageItemList.length;
             if(id >= fileLength) return;
             var imageItem = imageItemList[id];
             var img = new Image();
@@ -598,6 +595,14 @@
         fileReader.readAsDataURL(file);
     }
 
+    // Reverse order of display on preview
+    function reverseImgOrder(){
+        var imgs = previewDiv.childNodes;
+        for(i = 1; i < previewDiv.childElementCount; i ++){
+            previewDiv.insertBefore(previewDiv.childNodes[i], previewDiv.firstChild);
+        }
+        imageItemList.reverse();
+    }
 
     // Add downloadable buttons to the filebase column
     function updateFileBase(titleImgSrc, rot){
@@ -699,7 +704,7 @@
 
                 deleteButton.onclick = function(){
                     previewDiv.removeChild(previewContainer);
-                    delete inputFileList[childIndex];
+                    imageItemList.splice(childIndex, 1);
                 }
                 
                 // Preview rotation: Because image files may have preset rotation in its Exif
@@ -709,7 +714,7 @@
                 // 3: 180deg
                 // 6: -90deg
                 // 8: 90deg
-                if(imageItem.type == "png" || imageItem.type == "jpg"){  
+                if(imageItem.type != "pdf" && imageItem.type != "HEIC"){  
                      zeroOrientation(file, function(src, rotation){       
                          switch(rotation){
                             case 6:
