@@ -177,7 +177,7 @@
     const {PDFDocument, degrees} = PDFLib;
 
     var imageItem = function(id, type, file){
-        var obj = {"id" : id, "type" : type, "file" : file, "rotation":[0], pdfDoc:"", initRotation:0};
+        var obj = {"id" : id, "type" : type, "file" : file, "rotation":[0], "pdfDoc":"", initRotation:0};
 
         return obj;
     }
@@ -240,14 +240,14 @@
                     // Updates information on the input file type
                     var fileType = file.type;// returns "<type>/<file subtype>"
                     fileType = fileType.substring(fileType.indexOf('/') + 1, fileType.length); // slice the "<type>/"" off
-                    imageItemList.push(imageItem(thisChildIndex, fileType, file));
+                    let newImageItem = imageItem(thisChildIndex, fileType, file);
+                    imageItemList.push(newImageItem);
                 
                     // If pdf, then save pdf as PDFDocument for future use
                     if(fileType == "pdf"){
                         const fileReader = new FileReader(); 
                         fileReader.onload = async function(e){
-                            imageItemList[thisChildIndex]["pdfDoc"] = await PDFDocument.load(this.result);
-                           // test.innerHTML += imageItemList[thisChildIndex]["pdfDoc"].getPageCount();
+                            newImageItem["pdfDoc"] = await PDFDocument.load(this.result);
                         }
                         fileReader.readAsArrayBuffer(file);
                     }
@@ -258,7 +258,8 @@
                             file = res; 
                         });
                     }
-                    updatePreview(previewContainer, thisChildIndex, file);
+
+                    updatePreview(previewContainer, newImageItem, file);
                 }
                 inputId ++;
             }
@@ -282,6 +283,17 @@
         addSpaceDragLeave(event);
     }
 
+    // retrieves the imageItem by id
+    function getImageItemById(id){
+        imageItemList.forEach(imgItem => {
+                if(imgItem["id"] == id)
+                return imgItem;
+                else{ 
+                    return null;
+                }
+            });
+    }
+
     // Clear file of all inputs 
     function clearImg(){
         for(var i = 0; i < imageItemList.length; i ++){
@@ -294,12 +306,13 @@
     }
 
     // Use API to combine files into PDF
-    function combine(){   
+    async function combine(){   
         var pdfInitId = 0;
+        masterPdf = null;
 
-        function getFile(id){
+        function getFile(index){
             // retrieve all input files
-            var imageItem = imageItemList[id];
+            var imageItem = imageItemList[index]
             if(imageItem == null){
                 warning.innerHTML = "File not selected!";
                 return;
@@ -310,61 +323,60 @@
             }
             else{
                 warning.innerHTML = "";
-                return imageItemList[id]["file"];
+                return imageItem["file"];
             }
         }
        
-
+        var hasPDF = false;
         // check if any file is pdf typed.
         for(i = 0; i < imageItemList.length; i ++){
             let item = imageItemList[i];
             if(item["type"] == "pdf"){
                 //set up PDFDocument
-                masterPdf = item["pdfDoc"];
-                pdfInitId = item["id"];
+                masterPdf = await PDFDocument.create();// item["pdfDoc"];
+                pdfInitId = i;
                 // pdf typed file need PDFLib treatment
                 readImagePdf(0);
+                hasPDF = true;
                 break;
             }
-            else{ // if not pdf, then use jspdf treatment
-                readImage(0);
-                break;
-            }
+        }
+        
+        // if not pdf, then use jspdf treatment
+        if(!hasPDF)
+        { 
+            readImage(0);
         }
 
         var headerImgSrc = ""; // used for filebase
 
         // Merge pdf files
-        function readImagePdf(id){
+        function readImagePdf(index){
             var fileLength = imageItemList.length;
-            if(id >= fileLength) return;
-            var file = getFile(id);
-            test.innerHTML += " id:" + id + " ";
+            var file = getFile(index);
+            var imageItem = imageItemList[index];
+
             const pdfFileReader = new FileReader();
             pdfFileReader.onload = async function(e){
                 
-                // If id is the same as init id, do not need to copy since it is already initialized in the beginning
-                if(id == pdfInitId){
+                // If id is the same as init id, use it as the thumbnail
+                if(index == 0){
                     // Get arraybuffer info from pdf using PDFLib, used to render pdf with PDFJS
                     const srcReader = new FileReader();
                     srcReader.onload = function(){
                         headerImgSrc = this.result;
-                        // If only one page, directly process 
-                        if(id == fileLength - 1){
-                            updateFileBase(headerImgSrc, 0);
-                        }
-                        return; 
                     };
-                    srcReader.readAsDataURL(base64ToBlob(await masterPdf.saveAsBase64()));
-                }
-                // If is last page, put downloadable to filebase.
-                else if(id == fileLength - 1){
-                    updateFileBase(headerImgSrc, 0);
+                    if(imageItem["type"] == "pdf"){
+                        srcReader.readAsDataURL(base64ToBlob(await imageItem["pdfDoc"].saveAsBase64()));
+                    }
+                    else{
+                        srcReader.readAsDataURL(imageItem["file"]);
+                    }
                 }
 
                 // If the merging type is pdf, use addPage function to merge
-                if(imageItemList[id]["type"] == "pdf"){ 
-                    let copyPdf = imageItemList[id]["pdfDoc"];
+                if(imageItem["type"] == "pdf"){ 
+                    let copyPdf = imageItem["pdfDoc"];
                     var pageIndeces = [];
                     for(i = 0; i < copyPdf.getPageCount(); i++){
                         pageIndeces.push(i);
@@ -379,26 +391,26 @@
 
                     // Setting values based on rotation
                     let w, h, x, y, rot = 0;           
-                    switch(imageItemList[id].rotation[0]){
+                    switch(imageItem.rotation[0]){
                         case 0:
-                        x = 15; y = 830; w = 810; h = 570; rot = 270;
+                        x = 15; y = 15; w = 570; h = 810; rot = 0; 
                         break;
 
                         case 90:
-                        x = 585; y = 825; w = 570; h = 810; rot = 180;
+                        x = 15; y = 830; w = 810; h = 570; rot = 270;
                         break;
 
                         case 180:
-                        x = 580; y = 15; w = 810; h = 570; rot = 90;
+                        x = 585; y = 825; w = 570; h = 810; rot = 180;
                         break;
 
                         case 270: 
-                        x = 15; y = 15; w = 570; h = 810; rot = 0;
+                        x = 580; y = 15; w = 810; h = 570; rot = 90;
                         break;
                     }
                     
                     // Using embedPng() or embedJpg() if file is png or jpg/jpeg
-                    if(imageItemList[id]["type"] == "png"){
+                    if(imageItem["type"] == "png"){
                         bufferFileReader.onload = async function(e){
                             image = await masterPdf.embedPng(this.result);
                             newpage.drawImage(image, {
@@ -424,24 +436,31 @@
                     }
                 }
 
-                readImagePdf(id + 1);
+                // If is last page, put downloadable to filebase.
+                if(index == fileLength - 1){
+                    updateFileBase(headerImgSrc, 0);
+                    return;
+                }
+
+                readImagePdf(index + 1);
             }
             pdfFileReader.readAsArrayBuffer(file);
         }
 
         // Merge image files
-        function readImage(id){
+        function readImage(index){
             const fileReader = new FileReader();
             var fileLength = imageItemList.length;
-            if(id >= fileLength) return;
-            var imageItem = imageItemList[id];
+            test.innerHTML += "read image" + index + fileLength;
+            if(index >= fileLength) return;
+            var imageItem = imageItemList[index];
             var img = new Image();
-            var file = getFile(id);
+            var file = getFile(index);
 
             fileReader.onload = function(e){
                 img.src = this.result;
                 var fileType = imageItem["type"];
-                if(id != 0){
+                if(index != 0){
                 doc.addPage();
                 }   
                 else{
@@ -450,7 +469,7 @@
                 // Subtract current rotation from initial rotation in the Exif file,
                 // this is needed as initial rotation is added in the preview
                 var imageRot = (imageItem.rotation[0] - imageItem.initRotation) % 360;
-                test.innerHTML = " init rot " + imageItem.initRotation + " image rot " + imageItem.rotation[0] + " total rot " + imageRot;
+                //test.innerHTML = " init rot " + imageItem.initRotation + " image rot " + imageItem.rotation[0] + " total rot " + imageRot;
                 // Handle image rotation
                 // need to offset image as rotation is not around center
                 switch(imageRot){
@@ -476,10 +495,10 @@
                 }
 
                 // Update filebase with downloadble file with a "thumbnail" image
-                if(id == fileLength - 1){
+                if(index == fileLength - 1){
                     updateFileBase(headerImgSrc, imageItemList[0].rotation[0]);
                 }
-                readImage(id + 1);
+                readImage(index + 1);
             };
             fileReader.readAsDataURL(file);
         }
@@ -640,14 +659,14 @@
     }
 
     // Handler to update preview images
-    function updatePreview(previewContainer, childIndex, file){
+    function updatePreview(previewContainer, imageItem, file){
         if (FileReader) {
             // Filereader to retrieve data URL
             var fr = new FileReader();
             var rotateButton = document.createElement("button");
             var pdfEditButton = document.createElement("button");
             var deleteButton = document.createElement("button");
-            var imageItem = imageItemList[childIndex];
+
 
             fr.onload = function () {
                 // reset data of preview info
@@ -676,7 +695,7 @@
                 deleteButton.style.top = 0;
 
                 overlay.appendChild(deleteButton);
-                if(imageItemList[childIndex]["type"] == "pdf") { // only can edit if pdf
+                if(imageItem["type"] == "pdf") { // only can edit if pdf
                     overlay.appendChild(pdfEditButton);
                 }
                 else{ // pdf rotation will be edited in its own window
@@ -704,7 +723,7 @@
 
                 deleteButton.onclick = function(){
                     previewDiv.removeChild(previewContainer);
-                    imageItemList.splice(childIndex, 1);
+                    imageItemList.splice(imageItemList.indexOf(imageItem), 1);
                 }
                 
                 // Preview rotation: Because image files may have preset rotation in its Exif
@@ -744,12 +763,12 @@
             }
             fr.readAsDataURL(file);
 
-            pdfEditButton.onclick = function(){displayPDFEditor(fileDataURL, childIndex)};
+            pdfEditButton.onclick = function(){displayPDFEditor(fileDataURL, imageItem)};
         }
     }
 
     // display page to edit pdf
-    async function displayPDFEditor(src, childIndex){
+    async function displayPDFEditor(src, imageItem){
         var idIndex = 0;
         /* pairs original idIndex to actual index.
         This is necessary as the index of pages shift when one page is removed.
@@ -761,9 +780,9 @@
 
         pdfDiv.style.display = "block";
         pageOverlay.style.display = "block";
-        
+
         // set up pdflib for modifying modfs
-        const pdfDoc = imageItemList[childIndex]["pdfDoc"];
+        const pdfDoc = imageItem["pdfDoc"];
         const pdfPages = pdfDoc.getPages();
 
         // Get arraybuffer info from pdf using PDFLib, used to render pdf with PDFJS
@@ -796,7 +815,7 @@
                     canvas.height = Math.floor(viewport.height * scale);
                     canvas.style.width = "100%"
                     canvas.style.height =  "100%";
-                    canvas.style.transform = "rotate(" + imageItemList[childIndex].rotation[idIndex] + "deg)";
+                    canvas.style.transform = "rotate(" + imageItem.rotation[idIndex] + "deg)";
                     
                     var transform = scale !== 1
                     ? [scale, 0, 0, scale, 0, 0]
@@ -830,13 +849,12 @@
                         pdfDiv.removeChild(previewContainer);
 
                         // remove rotation data
-                        imageItemList[childIndex].rotation.splice(index, 1);
+                        imageItem.rotation.splice(index, 1);
 
                         // Trasmute id-pageIndex pair
                         transmuteIdValue(idToPage, index, pdf.numPages);
                     };
                     rotateButton.onclick = function(){
-                        let imageItem = imageItemList[childIndex];
                         // If missing rotational element in array, add it
                         for(var j = imageItem.rotation.length; j <= pdf.numPages; j ++){
                             imageItem.rotation.push(0);
@@ -872,12 +890,12 @@
         doneButton.margin = "auto";
 
         doneButton.onclick = async function(){
-            imageItemList[childIndex]["pdfDoc"] = pdfDoc;
+            imageItem["pdfDoc"] = pdfDoc;
             const srcFileReader = new FileReader();
 
             // Update the preview after edit,
             srcFileReader.onload = function(){
-                let preview = previewDiv.childNodes[childIndex].childNodes[0];
+                let preview = previewDiv.childNodes[imageItemList.indexOf(imageItem)].childNodes[0];
                 preview.src = this.result;
             };
             srcFileReader.readAsDataURL(base64ToBlob(await pdfDoc.saveAsBase64()));
